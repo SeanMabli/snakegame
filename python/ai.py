@@ -1,59 +1,89 @@
 import numpy as np
 import aiinpy as ai
+from alive_progress import alive_bar
 
-PopulationSize = 1000
-board = 8
+Board = 8
+popsize = 1000
+Score = np.zeros(popsize)
+done = np.full(popsize, False)
 
-model = ai.neuroevolution((8, 8), 4, PopulationSize, [
-  ai.conv(filtershape=(16, 3, 3), learningrate=0.01, activation=ai.sigmoid, padding=True),
-  ai.pool(filtershape=(2, 2), stride=(2, 2), opperation='Max'),
-  ai.nn(outshape=4, activation=ai.stablesoftmax, learningrate=0.1)
+Snake = [np.zeros((1, 2)) for _ in range(popsize)]
+Apple = []
+for _ in range(popsize):
+  x = 0
+  while np.sum(x) == 0:
+    x = np.random.randint(Board, size=2)
+  Apple.append(x)
+
+model = ai.neuroevolution((8, 8), 4, popsize, [
+  ai.nn(outshape=16, activation=ai.relu(), learningrate=0.1),
+  ai.nn(outshape=16, activation=ai.relu(), learningrate=0.1),
+  ai.nn(outshape=16, activation=ai.relu(), learningrate=0.1),
+  ai.nn(outshape=4, activation=ai.stablesoftmax(), learningrate=0.1)
 ])
 
-alive = np.array([True] * PopulationSize, dtype=bool)
-Score = np.zeros(PopulationSize)
+Turn = 0
 
-Snake = np.zeros((PopulationSize, 2, 63), dtype=int)
-apple = np.zeros((2, PopulationSize), dtype=int)
-for i in range(apple.shape[1]):
-  while np.sum(apple[:, i]) == 0:
-    apple[:, i] = np.random.randint(board, size=2)
+NumOfGen = 1000
+with alive_bar(NumOfGen) as bar:
+  for gen in range(NumOfGen):
+    while np.sum(done) != popsize:
+      for player in range(popsize):
+        if done[player] == False:
+          input = np.zeros((Board, Board))
+          input[Apple[0][0], Apple[0][1]] = 0.5
+          for i in range(len(Snake[player])):
+            if not np.array_equal(Snake[player][i], [8, 8]):
+              input[int(Snake[player][i, 0]), int(Snake[player][i, 1])] = 1
 
-for Generation in range(100):
-  while np.sum(alive) != 0:
-    for x in range(PopulationSize):
-      print(Snake.shape)
-      input = np.zeros((board, board))
-      for i in range(Snake.shape[0]):
-        input[Snake[x, i, 0], Snake[x, i, 1]] = 1
-      input[apple[x, 0], apple[x, 1]] = 0.5
-      out = model.forwardsingle(input, x)
-      if (np.max(out) == out[0]):
-        Snake[:, :, x] = np.vstack(([Snake[0, 0, x], Snake[0, 1, x] - 1], Snake[:-1, :, x]))
-      if (np.max(out) == out[1]):
-        Snake[:, :, x] = np.vstack(([Snake[0, 0, x] + 1, Snake[0, 1, x]], Snake[:-1, :, x]))
-      if (np.max(out) == out[2]):
-        Snake[:, :, x] = np.vstack(([Snake[0, 0, x], Snake[0, 1, x] + 1], Snake[:-1, :, x]))
-      if (np.max(out) == out[3]):
-        Snake[:, :, x] = np.vstack(([Snake[0, 0, x] - 1, Snake[0, 1, x]], Snake[:-1, :, x]))
+          out = model.forwardsingle(input, player)
 
-      # increase score
-      if np.array_equal(Snake[x, 0, :], apple[x, :]) and alive[x] == True:
-        Score[x] += 1
-        Snake[x, :, :] = np.vstack((Snake[x, :, :], [board, board]))
+          # Detect key commands
+          if np.max(out) == out[0]:
+            Snake[player] = np.vstack(([Snake[player][0, 0], Snake[player][0, 1] - 1], Snake[player][:-1]))
+          if np.max(out) == out[1]:
+            Snake[player] = np.vstack(([Snake[player][0, 0] + 1, Snake[player][0, 1]], Snake[player][:-1]))
+          if np.max(out) == out[2]:
+            Snake[player] = np.vstack(([Snake[player][0, 0], Snake[player][0, 1] + 1], Snake[player][:-1]))
+          if np.max(out) == out[3]:
+            Snake[player] = np.vstack(([Snake[player][0, 0] - 1, Snake[player][0, 1]], Snake[player][:-1]))
 
-      # Check that new apple location is not on the snake
-      for i in range(Snake.shape[0]):
-        if np.array_equal(apple[0], Snake[i, 0, x]) and np.array_equal(apple[1], Snake[i, 1, x]):
-          apple = np.random.randint(board, size=2)
+          # Increase score
+          if np.array_equal(Snake[player][0, :], Apple[player]):
+            Score[player] += 1
+            Snake[player] = np.vstack((Snake[player], [Board, Board]))
+
+          # Check that new apple location is not on the snake
           i = 0
-          
-      # Check out of bounds
-      if Snake[0, 0] < 0 or Snake[0, 0] > board - 1 or Snake[0, 1] < 0 or Snake[0, 1] > board - 1:
-        done = True
+          while i < Snake[player].shape[0]:
+            if Apple[player][0] == Snake[player][i, 0] and Apple[player][1] == Snake[player][i, 1]:
+              Apple[player] = np.random.randint(Board, size=2)
+              i = 0
+            i += 1
+
+          # Check out of bounds
+          if Snake[player][0, 0] < 0 or Snake[player][0, 0] > Board - 1 or Snake[player][0, 1] < 0 or Snake[player][0, 1] > Board - 1:
+            done[player] = True
+
+          # Check intersecting with itself
+          for i in range(1, Snake[player].shape[0]):
+            if np.array_equal(Snake[player][0, :], Snake[player][i, :]):
+              done[player] = True
       
-      # Check intersecting with itself
-      for i in range(Snake.shape[0] - 1):
-        for j in range(Snake.shape[0] - 1):
-          if i != j and np.array_equal(Snake[i, :], Snake[j, :]):
-            alive[x] = False
+      Turn += 1
+      if Turn  == 100:
+        done = np.full(popsize, True)
+    
+    print(np.sum(Score), np.max(Score))
+    Score = np.zeros(popsize)
+    done = np.full(popsize, False)
+
+    Snake = [np.zeros((1, 2)) for _ in range(popsize)]
+    Apple = []
+    for _ in range(popsize):
+      x = 0
+      while np.sum(x) == 0:
+        x = np.random.randint(Board, size=2)
+      Apple.append(x)
+    Turn = 0
+    bar()

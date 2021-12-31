@@ -2,8 +2,8 @@ import pygame
 import numpy as np
 
 # Everything is square
-DisplaySize = 401
-Board = 25
+DisplaySize = 400
+Board = 8
 BoxSize = (DisplaySize - 1) / Board
 Display = pygame.display.set_mode([DisplaySize, DisplaySize])
 
@@ -52,20 +52,21 @@ while not done:
       Snake = np.vstack((Snake, [Board, Board]))
 
     # Check that new apple location is not on the snake
-    for i in range(Snake.shape[0]):
+    i = 0
+    while i < Snake.shape[0]:
       if Apple[0] == Snake[i, 0] and Apple[1] == Snake[i, 1]:
         Apple = np.random.randint(Board, size=2)
         i = 0
-        
+      i += 1
+
     # Check out of bounds
     if Snake[0, 0] < 0 or Snake[0, 0] > Board - 1 or Snake[0, 1] < 0 or Snake[0, 1] > Board - 1:
       done = True
     
     # Check intersecting with itself
-    for i in range(Snake.shape[0] - 1):
-      for j in range(Snake.shape[0] - 1):
-        if i != j and np.array_equal(Snake[i, :], Snake[j, :]):
-          done = True 
+    for i in range(1, Snake.shape[0]):
+      if np.array_equal(Snake[0, :], Snake[i, :]):
+        done = True 
 
     pygame.display.flip()
 
